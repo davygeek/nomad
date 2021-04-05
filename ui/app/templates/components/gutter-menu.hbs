@@ -36,16 +36,19 @@
                 @onChange={{action this.gotoJobsForNamespace}}
                 @tagName="div"
                 @class="namespace-switcher"
-                title={{this.system.activeNamespace.name}}
                 as |namespace|>
-                <span class="ember-power-select-prefix">Namespace: </span>{{namespace.name}}
+                {{#if (eq namespace.name "default")}}
+                  Default Namespace
+                {{else}}
+                  {{namespace.name}}
+                {{/if}}
               </PowerSelect>
             </div>
           </li>
         </ul>
       {{/if}}
       <p class="menu-label">
-        Workload
+        工作台
       </p>
       <ul class="menu-list">
         <li>
@@ -54,7 +57,7 @@
             @query={{hash jobNamespace=this.system.activeNamespace.id}}
             @activeClass="is-active"
             data-test-gutter-link="jobs">
-            Jobs
+            任务
           </LinkTo>
         </li>
         {{#if (can "accept recommendation")}}
@@ -69,7 +72,7 @@
         {{/if}}
       </ul>
       <p class="menu-label is-minor">
-        Integrations
+        集成
       </p>
       <ul class="menu-list">
         <li>
@@ -78,17 +81,17 @@
             @query={{hash volumeNamespace=this.system.activeNamespace.id}}
             @activeClass="is-active"
             data-test-gutter-link="storage">
-            Storage <span class="tag is-small">Beta</span>
+            存储 <span class="tag is-small">Beta</span>
           </LinkTo>
         </li>
       </ul>
       <p class="menu-label">
-        Cluster
+        集群
       </p>
       <ul class="menu-list">
-        <li><LinkTo @route="clients" @activeClass="is-active" data-test-gutter-link="clients">Clients</LinkTo></li>
-        <li><LinkTo @route="servers" @activeClass="is-active" data-test-gutter-link="servers">Servers</LinkTo></li>
-        <li><LinkTo @route="topology" @activeClass="is-active" data-test-gutter-link="topology">Topology</LinkTo></li>
+        <li><LinkTo @route="clients" @activeClass="is-active" data-test-gutter-link="clients">计算节点</LinkTo></li>
+        <li><LinkTo @route="servers" @activeClass="is-active" data-test-gutter-link="servers">服务节点</LinkTo></li>
+        <li><LinkTo @route="topology" @activeClass="is-active" data-test-gutter-link="topology">拓扑图</LinkTo></li>
       </ul>
     </aside>
     <footer class="gutter-footer">

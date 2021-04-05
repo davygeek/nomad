@@ -1,4 +1,4 @@
-{{page-title "Servers"}}
+{{title "服务节点"}}
 <section class="section">
   {{#if this.isForbidden}}
     <ForbiddenMessage />
@@ -13,12 +13,12 @@
         @sortDescending={{this.sortDescending}}
         @class="with-foot" as |t|>
         <t.head>
-          <t.sort-by @prop="name">Name</t.sort-by>
-          <t.sort-by @prop="status">Status</t.sort-by>
+          <t.sort-by @prop="name">名称</t.sort-by>
+          <t.sort-by @prop="status">状态</t.sort-by>
           <t.sort-by @prop="isLeader">Leader</t.sort-by>
-          <t.sort-by @prop="address">Address</t.sort-by>
-          <t.sort-by @prop="serfPort">port</t.sort-by>
-          <t.sort-by @prop="datacenter">Datacenter</t.sort-by>
+          <t.sort-by @prop="address">IP地址</t.sort-by>
+          <t.sort-by @prop="serfPort">端口</t.sort-by>
+          <t.sort-by @prop="datacenter">数据中心</t.sort-by>
         </t.head>
         <t.body as |row|>
           <ServerAgentRow data-test-server-agent-row @agent={{row.model}} />

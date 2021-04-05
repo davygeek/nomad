@@ -1,4 +1,4 @@
-{{page-title "Clients"}}
+{{title "计算节点"}}
 <section class="section">
   {{#if this.isForbidden}}
     <ForbiddenMessage />
@@ -16,25 +16,25 @@
         <div class="button-bar">
           <MultiSelectDropdown
             data-test-class-facet
-            @label="Class"
+            @label="类"
             @options={{this.optionsClass}}
             @selection={{this.selectionClass}}
             @onSelect={{action this.setFacetQueryParam "qpClass"}} />
           <MultiSelectDropdown
             data-test-state-facet
-            @label="State"
+            @label="状态"
             @options={{this.optionsState}}
             @selection={{this.selectionState}}
             @onSelect={{action this.setFacetQueryParam "qpState"}} />
           <MultiSelectDropdown
             data-test-datacenter-facet
-            @label="Datacenter"
+            @label="数据中心"
             @options={{this.optionsDatacenter}}
             @selection={{this.selectionDatacenter}}
             @onSelect={{action this.setFacetQueryParam "qpDatacenter"}} />
           <MultiSelectDropdown
             data-test-volume-facet
-            @label="Volume"
+            @label="数据盘"
             @options={{this.optionsVolume}}
             @selection={{this.selectionVolume}}
             @onSelect={{action this.setFacetQueryParam "qpVolume"}} />
@@ -54,11 +54,11 @@
           <t.head>
             <th class="is-narrow"></th>
             <t.sort-by @prop="id">ID</t.sort-by>
-            <t.sort-by @class="is-200px is-truncatable" @prop="name">Name</t.sort-by>
-            <t.sort-by @prop="compositeStatus">State</t.sort-by>
-            <th>Address</th>
-            <t.sort-by @prop="datacenter">Datacenter</t.sort-by>
-            <th># Volumes</th>
+            <t.sort-by @class="is-200px is-truncatable" @prop="name">名称</t.sort-by>
+            <t.sort-by @prop="compositeStatus">状态</t.sort-by>
+            <th>IP地址</th>
+            <t.sort-by @prop="datacenter">数据中心</t.sort-by>
+            <th># 数据盘</th>
             <th># Allocs</th>
           </t.head>
           <t.body as |row|>
