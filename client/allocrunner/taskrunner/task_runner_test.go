@@ -202,6 +202,55 @@ func TestTaskRunner_BuildTaskConfig_CPU_Memory(t *testing.T) {
 	}
 }
 
+// TestTaskRunner_Stop_ExitCode asserts that the exit code is captured on a task, even if it's stopped
+func TestTaskRunner_Stop_ExitCode(t *testing.T) {
+	ctestutil.ExecCompatible(t)
+	t.Parallel()
+
+	alloc := mock.BatchAlloc()
+	alloc.Job.TaskGroups[0].Count = 1
+	task := alloc.Job.TaskGroups[0].Tasks[0]
+	task.KillSignal = "SIGTERM"
+	task.Driver = "raw_exec"
+	task.Config = map[string]interface{}{
+		"command": "/bin/sleep",
+		"args":    []string{"1000"},
+	}
+
+	conf, cleanup := testTaskRunnerConfig(t, alloc, task.Name)
+	defer cleanup()
+
+	// Run the first TaskRunner
+	tr, err := NewTaskRunner(conf)
+	require.NoError(t, err)
+	go tr.Run()
+
+	defer tr.Kill(context.Background(), structs.NewTaskEvent("cleanup"))
+
+	// Wait for it to be running
+	testWaitForTaskToStart(t, tr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = tr.Kill(ctx, structs.NewTaskEvent("shutdown"))
+	require.NoError(t, err)
+
+	var exitEvent *structs.TaskEvent
+	state := tr.TaskState()
+	for _, e := range state.Events {
+		if e.Type == structs.TaskTerminated {
+			exitEvent = e
+			break
+		}
+	}
+	require.NotNilf(t, exitEvent, "exit event not found: %v", state.Events)
+
+	require.Equal(t, 143, exitEvent.ExitCode)
+	require.Equal(t, 15, exitEvent.Signal)
+
+}
+
 // TestTaskRunner_Restore_Running asserts restoring a running task does not
 // rerun the task.
 func TestTaskRunner_Restore_Running(t *testing.T) {
@@ -1108,7 +1157,8 @@ func TestTaskRunner_CheckWatcher_Restart(t *testing.T) {
 	// backed by a mock consul whose checks are always unhealthy.
 	consulAgent := agentconsul.NewMockAgent()
 	consulAgent.SetStatus("critical")
-	consulClient := agentconsul.NewServiceClient(consulAgent, conf.Logger, true)
+	namespacesClient := agentconsul.NewNamespacesClient(agentconsul.NewMockNamespaces(nil))
+	consulClient := agentconsul.NewServiceClient(consulAgent, namespacesClient, conf.Logger, true)
 	go consulClient.Run()
 	defer consulClient.Shutdown()
 
@@ -1786,7 +1836,8 @@ func TestTaskRunner_DriverNetwork(t *testing.T) {
 
 	// Use a mock agent to test for services
 	consulAgent := agentconsul.NewMockAgent()
-	consulClient := agentconsul.NewServiceClient(consulAgent, conf.Logger, true)
+	namespacesClient := agentconsul.NewNamespacesClient(agentconsul.NewMockNamespaces(nil))
+	consulClient := agentconsul.NewServiceClient(consulAgent, namespacesClient, conf.Logger, true)
 	defer consulClient.Shutdown()
 	go consulClient.Run()
 
@@ -1801,7 +1852,7 @@ func TestTaskRunner_DriverNetwork(t *testing.T) {
 	testWaitForTaskToStart(t, tr)
 
 	testutil.WaitForResult(func() (bool, error) {
-		services, _ := consulAgent.Services()
+		services, _ := consulAgent.ServicesWithFilterOpts("", nil)
 		if n := len(services); n != 2 {
 			return false, fmt.Errorf("expected 2 services, but found %d", n)
 		}
@@ -1852,7 +1903,7 @@ func TestTaskRunner_DriverNetwork(t *testing.T) {
 
 		return true, nil
 	}, func(err error) {
-		services, _ := consulAgent.Services()
+		services, _ := consulAgent.ServicesWithFilterOpts("", nil)
 		for _, s := range services {
 			t.Logf(pretty.Sprint("Service: ", s))
 		}

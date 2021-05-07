@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/golang/snappy"
-
 	"github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/jobspec"
@@ -783,7 +782,6 @@ func ApiJobToStructJob(job *api.Job) *structs.Job {
 		Region:         *job.Region,
 		Namespace:      *job.Namespace,
 		ID:             *job.ID,
-		ParentID:       *job.ParentID,
 		Name:           *job.Name,
 		Type:           *job.Type,
 		Priority:       *job.Priority,
@@ -877,6 +875,7 @@ func ApiTgToStructsTG(job *structs.Job, taskGroup *api.TaskGroup, tg *structs.Ta
 	tg.Affinities = ApiAffinitiesToStructs(taskGroup.Affinities)
 	tg.Networks = ApiNetworkResourceToStructs(taskGroup.Networks)
 	tg.Services = ApiServicesToStructs(taskGroup.Services)
+	tg.Consul = apiConsulToStructs(taskGroup.Consul)
 
 	tg.RestartPolicy = &structs.RestartPolicy{
 		Attempts: *taskGroup.RestartPolicy.Attempts,
@@ -940,11 +939,13 @@ func ApiTgToStructsTG(job *structs.Job, taskGroup *api.TaskGroup, tg *structs.Ta
 			}
 
 			vol := &structs.VolumeRequest{
-				Name:     v.Name,
-				Type:     v.Type,
-				ReadOnly: v.ReadOnly,
-				Source:   v.Source,
-				PerAlloc: v.PerAlloc,
+				Name:           v.Name,
+				Type:           v.Type,
+				ReadOnly:       v.ReadOnly,
+				Source:         v.Source,
+				AttachmentMode: structs.CSIVolumeAttachmentMode(v.AttachmentMode),
+				AccessMode:     structs.CSIVolumeAccessMode(v.AccessMode),
+				PerAlloc:       v.PerAlloc,
 			}
 
 			if v.MountOptions != nil {
@@ -1080,6 +1081,7 @@ func ApiTaskToStructsTask(job *structs.Job, group *structs.TaskGroup,
 						TLSSkipVerify:          check.TLSSkipVerify,
 						Header:                 check.Header,
 						Method:                 check.Method,
+						Body:                   check.Body,
 						GRPCService:            check.GRPCService,
 						GRPCUseTLS:             check.GRPCUseTLS,
 						SuccessBeforePassing:   check.SuccessBeforePassing,
@@ -1314,6 +1316,7 @@ func ApiServicesToStructs(in []*api.Service) []*structs.Service {
 					TLSSkipVerify: check.TLSSkipVerify,
 					Header:        check.Header,
 					Method:        check.Method,
+					Body:          check.Body,
 					GRPCService:   check.GRPCService,
 					GRPCUseTLS:    check.GRPCUseTLS,
 					TaskName:      check.TaskName,
@@ -1572,6 +1575,15 @@ func apiConnectSidecarTaskToStructs(in *api.SidecarTask) *structs.SidecarTask {
 		KillSignal:    in.KillSignal,
 		KillTimeout:   in.KillTimeout,
 		LogConfig:     apiLogConfigToStructs(in.LogConfig),
+	}
+}
+
+func apiConsulToStructs(in *api.Consul) *structs.Consul {
+	if in == nil {
+		return nil
+	}
+	return &structs.Consul{
+		Namespace: in.Namespace,
 	}
 }
 

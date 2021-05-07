@@ -193,25 +193,6 @@ var (
 	validNamespaceName = regexp.MustCompile("^[a-zA-Z0-9-]{1,128}$")
 )
 
-// Context defines the scope in which a search for Nomad object operates, and
-// is also used to query the matching index value for this context
-type Context string
-
-const (
-	Allocs          Context = "allocs"
-	Deployments     Context = "deployment"
-	Evals           Context = "evals"
-	Jobs            Context = "jobs"
-	Nodes           Context = "nodes"
-	Namespaces      Context = "namespaces"
-	Quotas          Context = "quotas"
-	Recommendations Context = "recommendations"
-	ScalingPolicies Context = "scaling_policy"
-	All             Context = "all"
-	Plugins         Context = "plugins"
-	Volumes         Context = "volumes"
-)
-
 // NamespacedID is a tuple of an ID and a namespace
 type NamespacedID struct {
 	ID        string
@@ -578,35 +559,6 @@ type NodeEvaluateRequest struct {
 type NodeSpecificRequest struct {
 	NodeID   string
 	SecretID string
-	QueryOptions
-}
-
-// SearchResponse is used to return matches and information about whether
-// the match list is truncated specific to each type of context.
-type SearchResponse struct {
-	// Map of context types to ids which match a specified prefix
-	Matches map[Context][]string
-
-	// Truncations indicates whether the matches for a particular context have
-	// been truncated
-	Truncations map[Context]bool
-
-	QueryMeta
-}
-
-// SearchRequest is used to parameterize a request, and returns a
-// list of matches made up of jobs, allocations, evaluations, and/or nodes,
-// along with whether or not the information returned is truncated.
-type SearchRequest struct {
-	// Prefix is what ids are matched to. I.e, if the given prefix were
-	// "a", potential matches might be "abcd" or "aabb"
-	Prefix string
-
-	// Context is the type that can be matched against. A context can be a job,
-	// node, evaluation, allocation, or empty (indicated every context should be
-	// matched)
-	Context Context
-
 	QueryOptions
 }
 
@@ -4029,12 +3981,15 @@ type Job struct {
 	// token and is not stored after Job submission.
 	ConsulToken string
 
+	// ConsulNamespace is the Consul namespace
+	ConsulNamespace string
+
 	// VaultToken is the Vault token that proves the submitter of the job has
 	// access to the specified Vault policies. This field is only used to
 	// transfer the token and is not stored after Job submission.
 	VaultToken string
 
-	// VaultNamespace is the Vault namepace
+	// VaultNamespace is the Vault namespace
 	VaultNamespace string
 
 	// NomadTokenID is the Accessor ID of the ACL token (if any)
@@ -4379,6 +4334,7 @@ func (j *Job) HasUpdateStrategy() bool {
 func (j *Job) Stub(summary *JobSummary) *JobListStub {
 	return &JobListStub{
 		ID:                j.ID,
+		Namespace:         j.Namespace,
 		ParentID:          j.ParentID,
 		Name:              j.Name,
 		Datacenters:       j.Datacenters,
@@ -5941,6 +5897,9 @@ type TaskGroup struct {
 	// overridden in the task.
 	Networks Networks
 
+	// Consul configuration specific to this task group
+	Consul *Consul
+
 	// Services this group provides
 	Services []*Service
 
@@ -5970,6 +5929,7 @@ func (tg *TaskGroup) Copy() *TaskGroup {
 	ntg.Spreads = CopySliceSpreads(ntg.Spreads)
 	ntg.Volumes = CopyMapVolumeRequest(ntg.Volumes)
 	ntg.Scaling = ntg.Scaling.Copy()
+	ntg.Consul = ntg.Consul.Copy()
 
 	// Copy the network objects
 	if tg.Networks != nil {
@@ -6182,20 +6142,14 @@ func (tg *TaskGroup) Validate(j *Job) error {
 	}
 
 	// Validate the volume requests
-	for name, decl := range tg.Volumes {
-		if !(decl.Type == VolumeTypeHost ||
-			decl.Type == VolumeTypeCSI) {
-			mErr.Errors = append(mErr.Errors, fmt.Errorf("Volume %s has unrecognised type %s", name, decl.Type))
-			continue
-		}
-
-		if decl.PerAlloc && tg.Update != nil && tg.Update.Canary > 0 {
-			mErr.Errors = append(mErr.Errors,
-				fmt.Errorf("Volume %s cannot be per_alloc when canaries are in use", name))
-		}
-
-		if decl.Source == "" {
-			mErr.Errors = append(mErr.Errors, fmt.Errorf("Volume %s has an empty source", name))
+	var canaries int
+	if tg.Update != nil {
+		canaries = tg.Update.Canary
+	}
+	for name, volReq := range tg.Volumes {
+		if err := volReq.Validate(canaries); err != nil {
+			mErr.Errors = append(mErr.Errors, fmt.Errorf(
+				"Task group volume validation for %s failed: %v", name, err))
 		}
 	}
 
@@ -7452,6 +7406,34 @@ type AllocState struct {
 	Time  time.Time
 }
 
+// TaskHandle is  optional handle to a task propogated to the servers for use
+// by remote tasks. Since remote tasks are not implicitly lost when the node
+// they are assigned to is down, their state is migrated to the replacement
+// allocation.
+//
+//  Minimal set of fields from plugins/drivers/task_handle.go:TaskHandle
+type TaskHandle struct {
+	// Version of driver state. Used by the driver to gracefully handle
+	// plugin upgrades.
+	Version int
+
+	// Driver-specific state containing a handle to the remote task.
+	DriverState []byte
+}
+
+func (h *TaskHandle) Copy() *TaskHandle {
+	if h == nil {
+		return nil
+	}
+
+	newTH := TaskHandle{
+		Version:     h.Version,
+		DriverState: make([]byte, len(h.DriverState)),
+	}
+	copy(newTH.DriverState, h.DriverState)
+	return &newTH
+}
+
 // Set of possible states for a task.
 const (
 	TaskStatePending = "pending" // The task is waiting to be run.
@@ -7485,6 +7467,10 @@ type TaskState struct {
 
 	// Series of task events that transition the state of the task.
 	Events []*TaskEvent
+
+	// Experimental -  TaskHandle is based on drivers.TaskHandle and used
+	// by remote task drivers to migrate task handles between allocations.
+	TaskHandle *TaskHandle
 }
 
 // NewTaskState returns a TaskState initialized in the Pending state.
@@ -7506,16 +7492,18 @@ func (ts *TaskState) Copy() *TaskState {
 	if ts == nil {
 		return nil
 	}
-	copy := new(TaskState)
-	*copy = *ts
+	newTS := new(TaskState)
+	*newTS = *ts
 
 	if ts.Events != nil {
-		copy.Events = make([]*TaskEvent, len(ts.Events))
+		newTS.Events = make([]*TaskEvent, len(ts.Events))
 		for i, e := range ts.Events {
-			copy.Events[i] = e.Copy()
+			newTS.Events[i] = e.Copy()
 		}
 	}
-	return copy
+
+	newTS.TaskHandle = ts.TaskHandle.Copy()
+	return newTS
 }
 
 // Successful returns whether a task finished successfully. This doesn't really
@@ -9177,6 +9165,16 @@ type Allocation struct {
 	ModifyTime int64
 }
 
+// ConsulNamespace returns the Consul namespace of the task group associated
+// with this allocation.
+func (a *Allocation) ConsulNamespace() string {
+	return a.Job.LookupTaskGroup(a.TaskGroup).Consul.GetNamespace()
+}
+
+func (a *Allocation) JobNamespacedID() NamespacedID {
+	return NewNamespacedID(a.JobID, a.Namespace)
+}
+
 // Index returns the index of the allocation. If the allocation is from a task
 // group with count greater than 1, there will be multiple allocations for it.
 func (a *Allocation) Index() uint {
@@ -9785,6 +9783,10 @@ type AllocMetric struct {
 	// QuotaExhausted provides the exhausted dimensions
 	QuotaExhausted []string
 
+	// ResourcesExhausted provides the amount of resources exhausted by task
+	// during the allocation placement
+	ResourcesExhausted map[string]*Resources
+
 	// Scores is the scores of the final few nodes remaining
 	// for placement. The top score is typically selected.
 	// Deprecated: Replaced by ScoreMetaData in Nomad 0.9
@@ -9871,6 +9873,35 @@ func (a *AllocMetric) ExhaustQuota(dimensions []string) {
 	}
 
 	a.QuotaExhausted = append(a.QuotaExhausted, dimensions...)
+}
+
+// ExhaustResources updates the amount of resources exhausted for the
+// allocation because of the given task group.
+func (a *AllocMetric) ExhaustResources(tg *TaskGroup) {
+	if a.DimensionExhausted == nil {
+		return
+	}
+
+	if a.ResourcesExhausted == nil {
+		a.ResourcesExhausted = make(map[string]*Resources)
+	}
+
+	for _, t := range tg.Tasks {
+		exhaustedResources := a.ResourcesExhausted[t.Name]
+		if exhaustedResources == nil {
+			exhaustedResources = &Resources{}
+		}
+
+		if a.DimensionExhausted["memory"] > 0 {
+			exhaustedResources.MemoryMB += t.Resources.MemoryMB
+		}
+
+		if a.DimensionExhausted["cpu"] > 0 {
+			exhaustedResources.CPU += t.Resources.CPU
+		}
+
+		a.ResourcesExhausted[t.Name] = exhaustedResources
+	}
 }
 
 // ScoreNode is used to gather top K scoring nodes in a heap
@@ -10344,7 +10375,7 @@ func (e *Evaluation) NextRollingEval(wait time.Duration) *Evaluation {
 // ineligible, whether the job has escaped computed node classes and whether the
 // quota limit was reached.
 func (e *Evaluation) CreateBlockedEval(classEligibility map[string]bool,
-	escaped bool, quotaReached string) *Evaluation {
+	escaped bool, quotaReached string, failedTGAllocs map[string]*AllocMetric) *Evaluation {
 	now := time.Now().UTC().UnixNano()
 	return &Evaluation{
 		ID:                   uuid.Generate(),
@@ -10356,6 +10387,7 @@ func (e *Evaluation) CreateBlockedEval(classEligibility map[string]bool,
 		JobModifyIndex:       e.JobModifyIndex,
 		Status:               EvalStatusBlocked,
 		PreviousEval:         e.ID,
+		FailedTGAllocs:       failedTGAllocs,
 		ClassEligibility:     classEligibility,
 		EscapedComputedClass: escaped,
 		QuotaLimitReached:    quotaReached,

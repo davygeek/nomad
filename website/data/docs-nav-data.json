@@ -181,6 +181,10 @@
         "path": "configuration/sentinel"
       },
       {
+        "title": "search",
+        "path": "configuration/search"
+      },
+      {
         "title": "server",
         "path": "configuration/server"
       },
@@ -431,10 +435,6 @@
           {
             "title": "get",
             "path": "commands/license/get"
-          },
-          {
-            "title": "put",
-            "path": "commands/license/put"
           }
         ]
       },
@@ -1473,7 +1473,48 @@
       },
       {
         "title": "Agent",
-        "path": "autoscaling/agent"
+        "routes": [
+          {
+            "title": "Overview",
+            "path": "autoscaling/agent"
+          },
+          {
+            "title": "apm",
+            "path": "autoscaling/agent/apm"
+          },
+          {
+            "title": "dynamic_application_sizing",
+            "path": "autoscaling/agent/dynamic_application_sizing"
+          },
+          {
+            "title": "http",
+            "path": "autoscaling/agent/http"
+          },
+          {
+            "title": "nomad",
+            "path": "autoscaling/agent/nomad"
+          },
+          {
+            "title": "policy",
+            "path": "autoscaling/agent/policy"
+          },
+          {
+            "title": "policy_eval",
+            "path": "autoscaling/agent/policy_eval"
+          },
+          {
+            "title": "strategy",
+            "path": "autoscaling/agent/strategy"
+          },
+          {
+            "title": "target",
+            "path": "autoscaling/agent/target"
+          },
+          {
+            "title": "telemetry",
+            "path": "autoscaling/agent/telemetry"
+          }
+        ]
       },
       {
         "title": "API",
@@ -1623,6 +1664,10 @@
     "path": "ecosystem"
   },
   {
+    "title": "Nomad Partnerships",
+    "path": "partnerships"
+  },
+  {
     "title": "Who Uses Nomad",
     "path": "who-uses-nomad"
   },
@@ -1634,7 +1679,7 @@
         "path": "enterprise"
       },
       {
-        "title":"License",
+        "title": "License",
         "path": "enterprise/license"
       }
     ]
