@@ -72,8 +72,14 @@ endif
 		CC=$(CC) \
 		go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o $(GO_OUT)
 
-pkg/linux_arm/nomad: CC = arm-linux-gnueabihf-gcc-5
-pkg/linux_arm64/nomad: CC = aarch64-linux-gnu-gcc-5
+ifneq (armv7l,$(THIS_ARCH))
+pkg/linux_arm/nomad: CC = arm-linux-gnueabihf-gcc
+endif
+
+ifneq (aarch64,$(THIS_ARCH))
+pkg/linux_arm64/nomad: CC = aarch64-linux-gnu-gcc
+endif
+
 pkg/windows_%/nomad: GO_OUT = $@.exe
 
 # Define package targets for each of the build targets we actually have on this system
@@ -102,6 +108,7 @@ deps:  ## Install build and development dependencies
 	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@v2.5.1
 	go install github.com/golang/protobuf/protoc-gen-go@v1.3.4
 	go install github.com/hashicorp/go-msgpack/codec/codecgen@v1.1.5
+	go install github.com/bufbuild/buf/cmd/buf@v0.36.0
 
 .PHONY: lint-deps
 lint-deps: ## Install linter dependencies

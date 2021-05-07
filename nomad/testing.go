@@ -44,6 +44,10 @@ func TestACLServer(t testing.T, cb func(*Config)) (*Server, *structs.ACLToken, f
 func TestServer(t testing.T, cb func(*Config)) (*Server, func()) {
 	// Setup the default settings
 	config := DefaultConfig()
+
+	// Setup default enterprise-specific settings, including license
+	defaultEnterpriseTestConfig(config)
+
 	config.Logger = testlog.HCLogger(t)
 	config.Build = version.Version + "+unittest"
 	config.DevMode = true
@@ -94,6 +98,14 @@ func TestServer(t testing.T, cb func(*Config)) (*Server, func()) {
 
 	// Disable consul autojoining: tests typically join servers directly
 	config.ConsulConfig.ServerAutoJoin = &f
+
+	// Enable fuzzy search API
+	config.SearchConfig = &structs.SearchConfig{
+		FuzzyEnabled:  true,
+		LimitQuery:    20,
+		LimitResults:  100,
+		MinTermLength: 2,
+	}
 
 	// Invoke the callback if any
 	if cb != nil {

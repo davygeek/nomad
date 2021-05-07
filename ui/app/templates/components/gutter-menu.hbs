@@ -54,7 +54,6 @@
         <li>
           <LinkTo
             @route="jobs"
-            @query={{hash jobNamespace=this.system.activeNamespace.id}}
             @activeClass="is-active"
             data-test-gutter-link="jobs">
             任务
@@ -78,7 +77,6 @@
         <li>
           <LinkTo
             @route="csi"
-            @query={{hash volumeNamespace=this.system.activeNamespace.id}}
             @activeClass="is-active"
             data-test-gutter-link="storage">
             存储 <span class="tag is-small">Beta</span>

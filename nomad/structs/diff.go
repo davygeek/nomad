@@ -300,6 +300,11 @@ func (tg *TaskGroup) Diff(other *TaskGroup, contextual bool) (*TaskGroupDiff, er
 		diff.Objects = append(diff.Objects, diskDiff)
 	}
 
+	consulDiff := primitiveObjectDiff(tg.Consul, other.Consul, nil, "Consul", contextual)
+	if consulDiff != nil {
+		diff.Objects = append(diff.Objects, consulDiff)
+	}
+
 	// Update diff
 	// COMPAT: Remove "Stagger" in 0.7.0.
 	if uDiff := primitiveObjectDiff(tg.Update, other.Update, []string{"Stagger"}, "Update", contextual); uDiff != nil {
@@ -1642,7 +1647,7 @@ func volumeCSIMountOptionsDiff(oldMO, newMO *CSIMountOptions, contextual bool) *
 		oldMO = &CSIMountOptions{}
 		diff.Type = DiffTypeAdded
 		newPrimitiveFlat = flatmap.Flatten(newMO, nil, true)
-	} else if oldMO == nil && newMO != nil {
+	} else if oldMO != nil && newMO == nil {
 		newMO = &CSIMountOptions{}
 		diff.Type = DiffTypeDeleted
 		oldPrimitiveFlat = flatmap.Flatten(oldMO, nil, true)

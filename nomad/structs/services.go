@@ -2,6 +2,7 @@ package structs
 
 import (
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -61,6 +62,7 @@ type ServiceCheck struct {
 	TaskName               string              // What task to execute this check in
 	SuccessBeforePassing   int                 // Number of consecutive successes required before considered healthy
 	FailuresBeforeCritical int                 // Number of consecutive failures required before considered unhealthy
+	Body                   string              // Body to use in HTTP check
 	OnUpdate               string
 }
 
@@ -165,6 +167,10 @@ func (sc *ServiceCheck) Equals(o *ServiceCheck) bool {
 	}
 
 	if sc.Type != o.Type {
+		return false
+	}
+
+	if sc.Body != o.Body {
 		return false
 	}
 
@@ -352,6 +358,7 @@ func (sc *ServiceCheck) Hash(serviceID string) string {
 	hashString(h, sc.Interval.String())
 	hashString(h, sc.Timeout.String())
 	hashString(h, sc.Method)
+	hashString(h, sc.Body)
 	hashString(h, sc.OnUpdate)
 
 	// use name "true" to maintain ID stability
@@ -452,6 +459,12 @@ type Service struct {
 	Meta       map[string]string // Consul service meta
 	CanaryMeta map[string]string // Consul service meta when it is a canary
 
+	// The consul namespace in which this service will be registered. Namespace
+	// at the service.check level is not part of the Nomad API - it must be
+	// set at the job or group level. This field is managed internally so
+	// that Hash can work correctly.
+	Namespace string
+
 	// OnUpdate Specifies how the service and its checks should be evaluated
 	// during an update
 	OnUpdate string
@@ -513,6 +526,12 @@ func (s *Service) Canonicalize(job string, taskGroup string, task string) {
 
 	for _, check := range s.Checks {
 		check.Canonicalize(s.Name)
+	}
+
+	// Consul API returns "default" whether the namespace is empty or set as
+	// such, so we coerce our copy of the service to be the same.
+	if s.Namespace == "" {
+		s.Namespace = "default"
 	}
 }
 
@@ -610,6 +629,7 @@ func (s *Service) Hash(allocID, taskName string, canary bool) string {
 	hashMeta(h, s.CanaryMeta)
 	hashConnect(h, s.Connect)
 	hashString(h, s.OnUpdate)
+	hashString(h, s.Namespace)
 
 	// Base32 is used for encoding the hash as sha1 hashes can always be
 	// encoded without padding, only 4 bytes larger than base64, and saves
@@ -664,6 +684,10 @@ func hashConfig(h hash.Hash, c map[string]interface{}) {
 func (s *Service) Equals(o *Service) bool {
 	if s == nil || o == nil {
 		return s == o
+	}
+
+	if s.Namespace != o.Namespace {
+		return false
 	}
 
 	if s.AddressMode != o.AddressMode {
@@ -1622,13 +1646,29 @@ func (s *ConsulIngressService) Validate(isHTTP bool) error {
 	}
 
 	if s.Name == "" {
-		return fmt.Errorf("Consul Ingress Service requires a name")
+		return errors.New("Consul Ingress Service requires a name")
 	}
 
-	if isHTTP && len(s.Hosts) == 0 {
-		return fmt.Errorf("Consul Ingress Service requires one or more hosts when using HTTP protocol")
-	} else if !isHTTP && len(s.Hosts) > 0 {
-		return fmt.Errorf("Consul Ingress Service supports hosts only when using HTTP protocol")
+	// Validation of wildcard service name and hosts varies on whether the protocol
+	// for the gateway is HTTP.
+	// https://www.consul.io/docs/connect/config-entries/ingress-gateway#hosts
+	switch isHTTP {
+	case true:
+		if s.Name == "*" {
+			return nil
+		}
+
+		if len(s.Hosts) == 0 {
+			return errors.New("Consul Ingress Service requires one or more hosts when using HTTP protocol")
+		}
+	case false:
+		if s.Name == "*" {
+			return errors.New("Consul Ingress Service supports wildcard names only with HTTP protocol")
+		}
+
+		if len(s.Hosts) > 0 {
+			return errors.New("Consul Ingress Service supports hosts only when using HTTP protocol")
+		}
 	}
 
 	return nil
