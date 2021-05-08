@@ -1,27 +1,16 @@
 {{title "任务列表"}}
 <section class="section">
-  <div class="toolbar">
-    <div class="toolbar-item">
-      {{#if this.visibleJobs.length}}
-        <SearchBox
-          data-test-jobs-search
-          @searchTerm={{mut this.searchTerm}}
-          @onChange={{action this.resetPagination}}
-          @placeholder="Search jobs..." />
-      {{/if}}
-    </div>
-    {{#if (media "isMobile")}}
-      <div class="toolbar-item is-right-aligned">
-        {{#if (can "run job")}}
-          <LinkTo @route="jobs.run" data-test-run-job class="button is-primary">Run Job</LinkTo>
-        {{else}}
-          <button
-            data-test-run-job
-            class="button is-primary is-disabled tooltip is-right-aligned"
-            aria-label="You don’t have permission to run jobs"
-            disabled
-            type="button"
-          >Run Job</button>
+  {{#if this.isForbidden}}
+    <ForbiddenMessage />
+  {{else}}
+    <div class="toolbar">
+      <div class="toolbar-item">
+        {{#if this.visibleJobs.length}}
+          <SearchBox
+            data-test-jobs-search
+            @searchTerm={{mut this.searchTerm}}
+            @onChange={{action this.resetPagination}}
+            @placeholder="Search jobs..." />
         {{/if}}
       </div>
       {{#if (media "isMobile")}}
@@ -67,26 +56,22 @@
             @onSelect={{action this.setFacetQueryParam "qpPrefix"}} />
         </div>
       </div>
+      {{#if (not (media "isMobile"))}}
+        <div class="toolbar-item is-right-aligned">
+          {{#if (can "run job")}}
+            <LinkTo @route="jobs.run" data-test-run-job class="button is-primary">Run Job</LinkTo>
+          {{else}}
+            <button
+              data-test-run-job
+              class="button is-primary is-disabled tooltip is-right-aligned"
+              aria-label="You don’t have permission to run jobs"
+              disabled
+              type="button"
+            >Run Job</button>
+          {{/if}}
+        </div>
+      {{/if}}
     </div>
-    {{#if (not (media "isMobile"))}}
-      <div class="toolbar-item is-right-aligned">
-        {{#if (can "run job")}}
-          <LinkTo @route="jobs.run" data-test-run-job class="button is-primary">Run Job</LinkTo>
-        {{else}}
-          <button
-            data-test-run-job
-            class="button is-primary is-disabled tooltip is-right-aligned"
-            aria-label="You don’t have permission to run jobs"
-            disabled
-            type="button"
-          >Run Job</button>
-        {{/if}}
-      </div>
-    {{/if}}
-  </div>
-  {{#if this.isForbidden}}
-    <ForbiddenMessage />
-  {{else}}
     {{#if this.sortedJobs}}
       <ListPagination
         @source={{this.sortedJobs}}
@@ -99,9 +84,6 @@
           @class="with-foot" as |t|>
           <t.head>
             <t.sort-by @prop="name">名称</t.sort-by>
-            {{#if this.system.shouldShowNamespaces}}
-              <t.sort-by @prop="namespace.name">Namespace</t.sort-by>
-            {{/if}}
             <t.sort-by @prop="status">状态</t.sort-by>
             <t.sort-by @prop="type">类型</t.sort-by>
             <t.sort-by @prop="priority">优先级</t.sort-by>
